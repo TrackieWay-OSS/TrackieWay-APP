@@ -9,27 +9,42 @@ class AccessibilitySettingsPage extends StatefulWidget {
 }
 
 class _AccessibilitySettingsPageState extends State<AccessibilitySettingsPage> {
-  double _speechRate = 0.5;
-  double _pitch = 1.0;
-  bool _hapticFeedback = true;
-  String _selectedVoice = 'Voz Padrão (Feminina)';
+  // Estado das configurações
+  bool _wakeWordEnabled = true;
+  bool _shakeToStartEnabled = false;
+  bool _persistentNotificationEnabled = true;
 
-  final List<String> _availableVoices = [
-    'Voz Padrão (Feminina)',
-    'Voz Padrão (Masculina)',
-    'Voz Expressiva (Feminina)',
-    'Voz Calma (Masculina)',
-  ];
+  String _verbosityLevel = 'Médio';
+  final List<String> _verbosityOptions = ['Baixo', 'Médio', 'Alto'];
 
-  void _playTestSound() {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Testando voz com velocidade ${_speechRate.toStringAsFixed(1)} e tom ${_pitch.toStringAsFixed(1)}.',
-        ),
-        duration: const Duration(seconds: 2),
-      ),
+  bool _spatialAudioEnabled = true;
+  bool _earconsEnabled = false;
+
+  bool _hapticPatternsEnabled = true;
+
+  void _showSelectionDialog<T>({
+    required BuildContext context,
+    required String title,
+    required List<T> options,
+    required T currentSelection,
+    required ValueChanged<T> onSelected,
+  }) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return SimpleDialog(
+          title: Text(title),
+          children: options.map((option) {
+            return SimpleDialogOption(
+              onPressed: () {
+                onSelected(option);
+                Navigator.of(context).pop();
+              },
+              child: Text(option.toString()),
+            );
+          }).toList(),
+        );
+      },
     );
   }
 
@@ -43,129 +58,97 @@ class _AccessibilitySettingsPageState extends State<AccessibilitySettingsPage> {
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
-          _buildSectionTitle(context, 'Configurações de Voz'),
-          const SizedBox(height: 8),
-          _buildSliderTile(
-            label: 'Velocidade da Fala',
-            value: _speechRate,
-            onChanged: (newValue) {
-              setState(() => _speechRate = newValue);
-            },
-            min: 0.1,
-            max: 1.0,
-            divisions: 9,
-          ),
-          _buildSliderTile(
-            label: 'Tom da Voz',
-            value: _pitch,
-            onChanged: (newValue) {
-              setState(() => _pitch = newValue);
-            },
-            min: 0.5,
-            max: 2.0,
-            divisions: 15,
-          ),
-          _buildVoiceSelectorTile(context),
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4.0),
-            child: ElevatedButton.icon(
-              onPressed: _playTestSound,
-              icon: const Icon(Icons.play_arrow_rounded),
-              label: const Text('Testar Voz'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                textStyle: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
-          ),
-          const Divider(height: 48),
-          _buildSectionTitle(context, 'Feedback Tátil'),
-          const SizedBox(height: 8),
+          _buildSectionTitle(context, 'Ativação e Comandos'),
           _buildSwitchTile(
-            title: 'Vibração',
-            subtitle: 'Ativar resposta tátil para alertas.',
-            value: _hapticFeedback,
-            onChanged: (newValue) {
-              setState(() => _hapticFeedback = newValue);
+            title: 'Ativar por Voz ("Ok Trackie")',
+            subtitle: 'Inicie o assistente com um comando de voz.',
+            value: _wakeWordEnabled,
+            onChanged: (newValue) => setState(() => _wakeWordEnabled = newValue),
+            icon: Icons.mic_none,
+          ),
+          _buildSwitchTile(
+            title: 'Agitar para Iniciar',
+            subtitle: 'Sacuda o aparelho para ativar o assistente.',
+            value: _shakeToStartEnabled,
+            onChanged: (newValue) => setState(() => _shakeToStartEnabled = newValue),
+            icon: Icons.vibration,
+          ),
+          _buildSwitchTile(
+            title: 'Notificação Persistente',
+            subtitle: 'Acesso rápido na barra de notificações.',
+            value: _persistentNotificationEnabled,
+            onChanged: (newValue) => setState(() => _persistentNotificationEnabled = newValue),
+            icon: Icons.notifications_active_outlined,
+          ),
+          const Divider(height: 32),
+          _buildSectionTitle(context, 'Feedback de Áudio'),
+          _buildSelectorTile(
+            context: context,
+            title: 'Nível de Detalhe da Fala',
+            currentValue: _verbosityLevel,
+            onTap: () {
+              _showSelectionDialog(
+                context: context,
+                title: 'Selecione o Nível de Detalhe',
+                options: _verbosityOptions,
+                currentSelection: _verbosityLevel,
+                onSelected: (newValue) => setState(() => _verbosityLevel = newValue),
+              );
             },
+          ),
+          _buildSwitchTile(
+            title: 'Áudio Espacial (3D)',
+            subtitle: 'Sons e alertas virão da direção do objeto.',
+            value: _spatialAudioEnabled,
+            onChanged: (newValue) => setState(() => _spatialAudioEnabled = newValue),
+            icon: Icons.spatial_audio_off_outlined,
+          ),
+          _buildSwitchTile(
+            title: 'Ícones Sonoros (Earcons)',
+            subtitle: 'Use sons sutis para eventos comuns.',
+            value: _earconsEnabled,
+            onChanged: (newValue) => setState(() => _earconsEnabled = newValue),
+            icon: Icons.music_note_outlined,
+          ),
+          const Divider(height: 32),
+          _buildSectionTitle(context, 'Feedback Tátil'),
+          _buildSwitchTile(
+            title: 'Padrões de Vibração',
+            subtitle: 'Use vibrações distintas para alertas.',
+            value: _hapticPatternsEnabled,
+            onChanged: (newValue) => setState(() => _hapticPatternsEnabled = newValue),
+            icon: Icons.waves_outlined,
           ),
         ],
       ),
     );
   }
 
-  void _showVoiceSelectionDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return SimpleDialog(
-          title: const Text('Selecione uma Voz'),
-          children: _availableVoices.map((voice) {
-            return SimpleDialogOption(
-              onPressed: () {
-                setState(() {
-                  _selectedVoice = voice;
-                });
-                Navigator.of(context).pop();
-              },
-              child: Text(voice),
-            );
-          }).toList(),
-        );
-      },
-    );
-  }
-
   Widget _buildSectionTitle(BuildContext context, String title) {
-    return Text(
-      title,
-      style: Theme.of(context)
-          .textTheme
-          .titleLarge
-          ?.copyWith(fontWeight: FontWeight.bold),
-    );
-  }
-
-  Widget _buildSliderTile({
-    required String label,
-    required double value,
-    required ValueChanged<double> onChanged,
-    required double min,
-    required double max,
-    required int divisions,
-  }) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: Theme.of(context).textTheme.titleMedium),
-            Slider(
-              value: value,
-              onChanged: onChanged,
-              min: min,
-              max: max,
-              divisions: divisions,
-              label: (value).toStringAsFixed(1),
-            ),
-          ],
-        ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Text(
+        title,
+        style: Theme.of(context)
+            .textTheme
+            .titleLarge
+            ?.copyWith(fontWeight: FontWeight.bold),
       ),
     );
   }
 
-  Widget _buildVoiceSelectorTile(BuildContext context) {
+  Widget _buildSelectorTile({
+    required BuildContext context,
+    required String title,
+    required String currentValue,
+    required VoidCallback onTap,
+  }) {
     return Card(
       child: ListTile(
-        title: Text('Voz do Assistente',
-            style: Theme.of(context).textTheme.titleMedium),
-        subtitle: Text(_selectedVoice),
+        title: Text(title, style: Theme.of(context).textTheme.titleMedium),
+        subtitle: Text(currentValue),
         trailing: const Icon(Icons.arrow_drop_down),
-        onTap: () {
-          _showVoiceSelectionDialog(context);
-        },
+        onTap: onTap,
       ),
     );
   }
@@ -175,6 +158,7 @@ class _AccessibilitySettingsPageState extends State<AccessibilitySettingsPage> {
     required String subtitle,
     required bool value,
     required ValueChanged<bool> onChanged,
+    required IconData icon,
   }) {
     return Card(
       child: SwitchListTile(
@@ -182,9 +166,9 @@ class _AccessibilitySettingsPageState extends State<AccessibilitySettingsPage> {
         subtitle: Text(subtitle),
         value: value,
         onChanged: onChanged,
-        secondary:
-            Icon(value ? Icons.vibration : Icons.smartphone_sharp),
+        secondary: Icon(icon),
       ),
     );
   }
 }
+
