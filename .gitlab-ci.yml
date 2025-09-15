@@ -1,0 +1,201 @@
+stages:
+  - test
+  - build
+  - deploy
+
+variables:
+  FLUTTER_VERSION: "3.24.5"
+  ANDROID_SDK_TOOLS: "11076708"
+  ANDROID_BUILD_TOOLS: "34.0.0"
+  ANDROID_PLATFORM: "android-34"
+  GIT_DEPTH: "0"
+
+.flutter_setup:
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq git curl unzip
+    - git clone https://github.com/flutter/flutter.git -b stable --depth 1 /flutter
+    - export PATH="$PATH:/flutter/bin"
+    - flutter --version
+    - flutter doctor -v
+    - flutter pub get
+
+.android_setup:
+  before_script:
+    - !reference [.flutter_setup, before_script]
+    - apt-get install -y openjdk-17-jdk wget
+    - export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+    - mkdir -p /android-sdk && cd /android-sdk
+    - wget -q https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_SDK_TOOLS}_latest.zip
+    - unzip -q commandlinetools-linux-${ANDROID_SDK_TOOLS}_latest.zip
+    - export ANDROID_HOME=/android-sdk
+    - export PATH="$PATH:$ANDROID_HOME/cmdline-tools/bin"
+    - yes | sdkmanager --sdk_root=$ANDROID_HOME --licenses
+    - sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" "platforms;${ANDROID_PLATFORM}" "build-tools;${ANDROID_BUILD_TOOLS}"
+
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - .pub-cache/
+    - .dart_tool/
+    - ios/Pods/
+    - ~/.gradle/
+
+# ============= TEST STAGE =============
+test:analyze:
+  stage: test
+  image: ubuntu:22.04
+  extends: .flutter_setup
+  script:
+    - flutter analyze --no-fatal-infos
+  only:
+    - merge_requests
+    - main
+    - develop
+
+test:unit:
+  stage: test
+  image: ubuntu:22.04
+  extends: .flutter_setup
+  script:
+    - flutter test --coverage --test-randomize-ordering-seed random
+    - lcov --summary coverage/lcov.info
+  coverage: '/lines\.*: (\d+\.\d+)%/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/cobertura.xml
+  only:
+    - merge_requests
+    - main
+    - develop
+
+# ============= BUILD STAGE =============
+build:android:
+  stage: build
+  image: ubuntu:22.04
+  extends: .android_setup
+  script:
+    # Decode keystore
+    - echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
+    
+    # Create key.properties
+    - |
+      cat > android/key.properties <<EOF
+      storePassword=$KEYSTORE_PASSWORD
+      keyPassword=$KEY_PASSWORD
+      keyAlias=$KEY_ALIAS
+      storeFile=upload-keystore.jks
+      EOF
+    
+    # Update version
+    - export VERSION=$(grep 'version:' pubspec.yaml | sed 's/version: //g' | sed 's/+.*//')
+    - export BUILD_NUMBER=${CI_PIPELINE_IID}
+    - sed -i "s/version: .*/version: $VERSION+$BUILD_NUMBER/" pubspec.yaml
+    
+    # Build APK
+    - flutter build apk --release --split-per-abi
+    
+    # Build AAB
+    - flutter build appbundle --release
+    
+    # Clean sensitive files
+    - rm -f android/app/upload-keystore.jks android/key.properties
+  artifacts:
+    paths:
+      - build/app/outputs/flutter-apk/*.apk
+      - build/app/outputs/bundle/release/*.aab
+    expire_in: 1 week
+  only:
+    - main
+    - develop
+    - tags
+
+build:ios:
+  stage: build
+  tags:
+    - macos
+  before_script:
+    - brew install flutter cocoapods
+    - flutter --version
+    - flutter doctor -v
+    - flutter pub get
+    - cd ios && pod install
+  script:
+    # Install certificates
+    - |
+      echo "$IOS_BUILD_CERTIFICATE_BASE64" | base64 -d > /tmp/certificate.p12
+      echo "$IOS_PROVISION_PROFILE_BASE64" | base64 -d > /tmp/profile.mobileprovision
+      
+      security create-keychain -p "$CI_PIPELINE_ID" build.keychain
+      security default-keychain -s build.keychain
+      security unlock-keychain -p "$CI_PIPELINE_ID" build.keychain
+      security set-keychain-settings -t 3600 -u build.keychain
+      
+      security import /tmp/certificate.p12 -k build.keychain -P "$IOS_P12_PASSWORD" -T /usr/bin/codesign
+      security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$CI_PIPELINE_ID" build.keychain
+      
+      mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+      cp /tmp/profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
+    
+    # Update version
+    - export VERSION=$(grep 'version:' pubspec.yaml | sed 's/version: //g' | sed 's/+.*//')
+    - export BUILD_NUMBER=${CI_PIPELINE_IID}
+    - sed -i '' "s/version: .*/version: $VERSION+$BUILD_NUMBER/" pubspec.yaml
+    
+    # Build IPA
+    - flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
+    
+    # Clean keychain
+    - security delete-keychain build.keychain
+    - rm -rf ~/Library/MobileDevice/Provisioning\ Profiles
+  artifacts:
+    paths:
+      - build/ios/ipa/*.ipa
+    expire_in: 1 week
+  only:
+    - main
+    - develop
+    - tags
+
+# ============= DEPLOY STAGE =============
+deploy:google-play:
+  stage: deploy
+  image: ruby:3.2
+  dependencies:
+    - build:android
+  before_script:
+    - gem install fastlane
+  script:
+    - echo "$GOOGLE_PLAY_SERVICE_ACCOUNT_JSON" > /tmp/play-store.json
+    - |
+      fastlane supply \
+        --aab build/app/outputs/bundle/release/app-release.aab \
+        --json_key /tmp/play-store.json \
+        --package_name com.example.trackie_app \
+        --track internal \
+        --skip_upload_metadata \
+        --skip_upload_images \
+        --skip_upload_screenshots
+  only:
+    - tags
+
+deploy:app-store:
+  stage: deploy
+  tags:
+    - macos
+  dependencies:
+    - build:ios
+  before_script:
+    - gem install fastlane
+  script:
+    - echo "$APP_STORE_CONNECT_API_KEY" | base64 -d > /tmp/api-key.p8
+    - |
+      fastlane pilot upload \
+        --ipa build/ios/ipa/*.ipa \
+        --api_key_path /tmp/api-key.p8 \
+        --api_key_id "$APP_STORE_CONNECT_API_KEY_ID" \
+        --issuer_id "$APP_STORE_CONNECT_ISSUER_ID" \
+        --skip_waiting_for_build_processing
+  only:
+    - tags
