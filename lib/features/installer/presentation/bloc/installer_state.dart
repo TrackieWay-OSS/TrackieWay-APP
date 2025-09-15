@@ -14,6 +14,18 @@ abstract class InstallerState extends Equatable {
 
   @override
   List<Object> get props => [components, isDownloadingAll, overallProgress];
+
+  InstallerState copyWith({
+    List<DownloadableComponent>? components,
+    bool? isDownloadingAll,
+    double? overallProgress,
+  }) {
+    return InstallerLoading(
+      components: components ?? this.components,
+      isDownloadingAll: isDownloadingAll ?? this.isDownloadingAll,
+      overallProgress: overallProgress ?? this.overallProgress,
+    );
+  }
 }
 
 class InstallerInitial extends InstallerState {
@@ -27,3 +39,4 @@ class InstallerLoading extends InstallerState {
     required super.overallProgress,
   });
 }
+

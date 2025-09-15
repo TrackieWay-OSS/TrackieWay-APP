@@ -14,5 +14,18 @@ class DownloadableComponent {
     this.status = ComponentStatus.notInstalled,
     this.downloadProgress = 0.0,
   });
+
+  DownloadableComponent copyWith({
+    ComponentStatus? status,
+    double? downloadProgress,
+  }) {
+    return DownloadableComponent(
+      title: title,
+      description: description,
+      size: size,
+      status: status ?? this.status,
+      downloadProgress: downloadProgress ?? this.downloadProgress,
+    );
+  }
 }
 

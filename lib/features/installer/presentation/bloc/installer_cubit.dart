@@ -26,72 +26,59 @@ class InstallerCubit extends Cubit<InstallerState> {
     ];
   }
 
-  Future<void> downloadComponent(DownloadableComponent component) async {
-    final components = List<DownloadableComponent>.from(state.components);
-    final componentIndex =
-        components.indexWhere((c) => c.title == component.title);
-    if (componentIndex == -1) return;
+  Future<void> downloadComponentByTitle(String title) async {
+    _updateComponentState(title, ComponentStatus.downloading, 0.0);
 
-    components[componentIndex].status = ComponentStatus.downloading;
-    components[componentIndex].downloadProgress = 0.0;
-    _emitLoadingState();
-
-    try {
-      for (int i = 1; i <= 10; i++) {
-        await Future.delayed(const Duration(milliseconds: 300));
-
-        if (component.title.contains('TrackieAssets') && i > 5) {
-          throw Exception('Simulated network error');
-        }
-        
-        components[componentIndex].downloadProgress = i / 10.0;
-        _emitLoadingState();
-      }
-      components[componentIndex].status = ComponentStatus.installed;
-    } catch (e) {
-      components[componentIndex].status = ComponentStatus.error;
-    } finally {
-      _emitLoadingState();
+    // MUDANÇA: A velocidade do download agora é mais rápida.
+    // Se o download estiver mais rápido, significa que este código está a ser executado.
+    for (int i = 1; i <= 10; i++) {
+      await Future.delayed(const Duration(milliseconds: 150)); // Era 250ms
+      _updateComponentState(title, ComponentStatus.downloading, i / 10.0);
     }
+
+    _updateComponentState(title, ComponentStatus.installed, 1.0);
   }
 
   Future<void> downloadAllComponents() async {
     final componentsToDownload = state.components
-        .where((c) => c.status != ComponentStatus.installed)
+        .where((c) =>
+            c.status == ComponentStatus.notInstalled ||
+            c.status == ComponentStatus.error)
         .toList();
+
     if (componentsToDownload.isEmpty) return;
-    
-    emit(InstallerLoading(
-        components: state.components,
-        isDownloadingAll: true,
-        overallProgress: 0.0));
+
+    emit(state.copyWith(isDownloadingAll: true, overallProgress: 0.0));
 
     int completed = 0;
     final total = componentsToDownload.length;
 
     for (final component in componentsToDownload) {
-      await downloadComponent(component);
-       if (state.components.any((c) => c.status == ComponentStatus.error)) {
-        break; 
-      }
+      await downloadComponentByTitle(component.title);
       completed++;
-      emit(InstallerLoading(
-          components: state.components,
-          isDownloadingAll: true,
-          overallProgress: completed / total));
+      emit(state.copyWith(overallProgress: completed / total));
     }
-    
-    emit(InstallerLoading(
-        components: state.components,
-        isDownloadingAll: false,
-        overallProgress: state.overallProgress));
+
+    emit(state.copyWith(isDownloadingAll: false));
   }
 
-  void _emitLoadingState() {
-    emit(InstallerLoading(
-      components: state.components,
-      isDownloadingAll: state.isDownloadingAll,
-      overallProgress: state.overallProgress,
-    ));
+  void _updateComponentState(
+    String title,
+    ComponentStatus status,
+    double progress,
+  ) {
+    final components = List<DownloadableComponent>.from(state.components);
+    final index = components.indexWhere((c) => c.title == title);
+
+    if (index != -1) {
+      final oldComponent = components[index];
+      components[index] = oldComponent.copyWith(
+        status: status,
+        downloadProgress: progress,
+      );
+      emit(state.copyWith(components: components));
+    }
   }
 }
+
+

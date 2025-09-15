@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:trackie_app/app/view/nav_page.dart';
 import 'package:trackie_app/features/installer/domain/entities/component_entity.dart';
 import 'package:trackie_app/features/installer/presentation/bloc/installer_cubit.dart';
 import 'package:trackie_app/features/installer/presentation/bloc/installer_state.dart';
@@ -24,7 +25,8 @@ class SetupHubView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Trackie Installer'),
+        // MUDANÇA PARA TESTE: O título agora é diferente.
+        title: const Text('Trackie Installer v2 - ATUALIZADO'),
         centerTitle: true,
         actions: [
           IconButton(
@@ -62,6 +64,13 @@ class SetupHubView extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+   void _navigateToHome(BuildContext context) {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => const NavPage(),
       ),
     );
   }
@@ -160,7 +169,7 @@ class SetupHubView extends StatelessWidget {
         return ElevatedButton(
           onPressed: isDownloadingAll
               ? null
-              : () => cubit.downloadComponent(component),
+              : () => cubit.downloadComponentByTitle(component.title),
           child: const Text('Baixar'),
         );
       case ComponentStatus.downloading:
@@ -182,7 +191,7 @@ class SetupHubView extends StatelessWidget {
             icon: const Icon(Icons.error, color: Colors.red, size: 32),
             onPressed: isDownloadingAll
                 ? null
-                : () => cubit.downloadComponent(component),
+                : () => cubit.downloadComponentByTitle(component.title),
           ),
         );
     }
@@ -190,7 +199,7 @@ class SetupHubView extends StatelessWidget {
 
   Widget _buildStartButton(BuildContext context, bool areAllComponentsInstalled) {
     return ElevatedButton.icon(
-      onPressed: areAllComponentsInstalled ? () {} : null,
+      onPressed: areAllComponentsInstalled ? () => _navigateToHome(context) : null,
       icon: const Icon(Icons.rocket_launch),
       label: const Text('Iniciar Assistente'),
       style: ElevatedButton.styleFrom(
