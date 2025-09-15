@@ -77,7 +77,7 @@ class DevicesView extends StatelessWidget {
                         children: [
                           Text(
                             isConnected
-                                ? device!.name
+                                ? device.name
                                 : 'Nenhum Dispositivo Conectado',
                             style: theme.textTheme.titleLarge
                                 ?.copyWith(fontWeight: FontWeight.bold),
@@ -85,7 +85,7 @@ class DevicesView extends StatelessWidget {
                           const SizedBox(height: 4),
                           Text(
                             isConnected
-                                ? 'Bateria: ${device!.batteryLevel}% | Firmware: ${device.firmwareVersion}'
+                                ? 'Bateria: ${device.batteryLevel}% | Firmware: ${device.firmwareVersion}'
                                 : 'Procure por dispositivos para conectar.',
                             style: theme.textTheme.bodyMedium,
                           ),
@@ -192,4 +192,3 @@ class DevicesView extends StatelessWidget {
     );
   }
 }
-
