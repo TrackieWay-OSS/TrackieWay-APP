@@ -183,8 +183,8 @@ jobs:
       - name: 📦 Get Flutter dependencies
         run: flutter pub get
         
-      - name: 🔧 Generate iOS project files
-        run: flutter build ios --no-codesign
+      - name: 🔧 Recreate iOS project files
+        run: flutter create . --platforms=ios
         
       - name: 📦 Install iOS dependencies (CocoaPods)
         run: |
