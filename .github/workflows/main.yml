@@ -183,7 +183,8 @@ jobs:
       - name: 📦 Get Flutter dependencies
         run: flutter pub get
         
-
+      - name: 🔧 Prepare for iOS build
+        run: flutter build ios --config-only
         
       - name: 📦 Install iOS dependencies (CocoaPods)
         run: |
