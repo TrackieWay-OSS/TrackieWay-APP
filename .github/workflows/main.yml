@@ -180,23 +180,19 @@ jobs:
           ruby-version: '3.2'
           bundler-cache: true
           
-      - name: 📦 Install CocoaPods
-        run: |
-          sudo gem install cocoapods
-          
       - name: 📦 Get Flutter dependencies
         run: flutter pub get
         
-      - name: 💾 Cache Pods
-        uses: actions/cache@v3
-        with:
-          path: ios/Pods
-          key: pods-${{ runner.os }}-${{ hashFiles('**/Podfile.lock') }}
-          
-      - name: 📦 Install iOS dependencies
+      - name: 📦 Install iOS dependencies (CocoaPods)
         run: |
           cd ios
           pod install --repo-update
+          
+      - name: 💾 Cache Pods
+        uses: actions/cache@v4
+        with:
+          path: ios/Pods
+          key: pods-${{ runner.os }}-${{ hashFiles('**/Podfile.lock') }}
           
       - name: 🔐 Install certificates
         env:
@@ -250,6 +246,7 @@ jobs:
         run: |
           security delete-keychain $RUNNER_TEMP/app-signing.keychain-db
           rm -rf ~/Library/MobileDevice/Provisioning\ Profiles
+
 
   # ============= DEPLOY =============
   deploy:
