@@ -158,7 +158,7 @@ jobs:
           rm -f android/key.properties
 
   # ============= BUILD iOS =============
-  build-ios:
+   build-ios:
     name: Build iOS (IPA)
     needs: test
     runs-on: macos-latest
@@ -183,20 +183,8 @@ jobs:
       - name: 📦 Get Flutter dependencies
         run: flutter pub get
         
-      - name: 🔧 Prepare for iOS build
-        run: flutter build ios --config-only
-        
-      - name: 📦 Install iOS dependencies (CocoaPods)
-        run: |
-          cd ios
-          pod install --repo-update
-          
-      - name: 💾 Cache Pods
-        uses: actions/cache@v4
-        with:
-          path: ios/Pods
-          key: pods-${{ runner.os }}-${{ hashFiles('**/Podfile.lock') }}
-          
+      # --- INÍCIO DA MUDANÇA CRÍTICA ---
+
       - name: 🔐 Install certificates
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.IOS_BUILD_CERTIFICATE_BASE64 }}
@@ -226,6 +214,22 @@ jobs:
           # Apply provisioning profile
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles
+          
+      - name: 🔧 Prepare for iOS build
+        run: flutter build ios --config-only
+        
+      - name: 📦 Install iOS dependencies (CocoaPods)
+        run: |
+          cd ios
+          pod install --repo-update
+          
+      # --- FIM DA MUDANÇA CRÍTICA ---
+          
+      - name: 💾 Cache Pods
+        uses: actions/cache@v4
+        with:
+          path: ios/Pods
+          key: pods-${{ runner.os }}-${{ hashFiles('**/Podfile.lock') }}
           
       - name: 🔢 Set version
         run: |
