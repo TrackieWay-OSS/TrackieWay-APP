@@ -1,0 +1,34 @@
+# Uncomment this line to define a global platform for your project
+platform :ios, '13.0'
+
+# CocoaPods analytics sends network requests to Segment, Inc. to help improve CocoaPods.
+# You can turn off analytics by uncommenting the following line.
+# ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+project 'Runner', {
+  'Debug' => :debug,
+  'Profile' => :release,
+  'Release' => :release,
+}
+
+def flutter_pods
+  flutter_application_path = '../'
+  pod 'Flutter', :path => File.join(flutter_application_path, '.ios', 'Flutter', 'engine')
+  # Add other Flutter plugins here.
+end
+
+target 'Runner' do
+  use_frameworks!
+  use_modular_headers!
+
+  flutter_pods
+
+  post_install do |installer|
+    installer.pods_project.targets.each do |target|
+      flutter_additional_ios_build_settings(target)
+      target.build_configurations.each do |config|
+        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
+      end
+    end
+  end
+end
