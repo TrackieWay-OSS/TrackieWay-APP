@@ -158,7 +158,7 @@ jobs:
           rm -f android/key.properties
 
   # ============= BUILD iOS =============
-   build-ios:
+    build-ios:
     name: Build iOS (IPA)
     needs: test
     runs-on: macos-latest
