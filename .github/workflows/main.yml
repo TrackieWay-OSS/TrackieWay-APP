@@ -158,138 +158,141 @@ jobs:
           rm -f android/key.properties
 
 # ============= BUILD iOS =============
-
-      - name: Build iOS (IPA)
-          runs-on: macos-latest
-      
-        steps:
-          - name: 📥 Checkout code
-            uses: actions/checkout@v4
-      
-          - name: 🎯 Setup Flutter
-            uses: subosito/flutter-action@v2
-            with:
-              flutter-version: 3.35.3
-              channel: 'stable'
-              cache: true
-      
-          - name: 🎯 Setup Ruby
-            uses: ruby/setup-ruby@v1
-            with:
-              ruby-version: '3.2'
-              bundler-cache: true
-      
-          - name: 📦 Get Flutter dependencies
-            run: flutter pub get
-      
-          # --- INÍCIO DA MUDANÇA CRÍTICA ---
-          - name: 🔐 Install certificates
-            env:
-              BUILD_CERTIFICATE_BASE64: ${{ secrets.IOS_BUILD_CERTIFICATE_BASE64 }}
-              P12_PASSWORD: ${{ secrets.IOS_P12_PASSWORD }}
-              BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
-              KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
-            run: |
-              set -euo pipefail
-      
-              # --- sanity checks ---
-              if [ -z "${BUILD_CERTIFICATE_BASE64:-}" ] || [ -z "${BUILD_PROVISION_PROFILE_BASE64:-}" ] || [ -z "${P12_PASSWORD:-}" ] || [ -z "${KEYCHAIN_PASSWORD:-}" ]; then
-                echo "::error ::One or more iOS signing secrets are empty. Make sure IOS_BUILD_CERTIFICATE_BASE64, IOS_P12_PASSWORD, IOS_PROVISION_PROFILE_BASE64 and IOS_KEYCHAIN_PASSWORD are set."
-                exit 1
-              fi
-      
-              # paths
-              CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
-              PP_PATH="$RUNNER_TEMP/build_pp.mobileprovision"
-              KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
-      
-              echo "Decoding base64 assets to temporary files..."
-              # decode with portable fallback (GNU/BSD)
-              printf '%s' "$BUILD_CERTIFICATE_BASE64" | base64 --decode > "$CERTIFICATE_PATH" 2>/dev/null || printf '%s' "$BUILD_CERTIFICATE_BASE64" | base64 -D > "$CERTIFICATE_PATH"
-              printf '%s' "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode > "$PP_PATH" 2>/dev/null || printf '%s' "$BUILD_PROVISION_PROFILE_BASE64" | base64 -D > "$PP_PATH"
-      
-              # verify files look reasonable
-              if [ ! -s "$CERTIFICATE_PATH" ]; then
-                echo "::error ::Decoded certificate file is empty or missing ($CERTIFICATE_PATH). Check the secret encoding."
-                exit 1
-              fi
-              if [ ! -s "$PP_PATH" ]; then
-                echo "::error ::Decoded provisioning profile is empty or missing ($PP_PATH). Check the secret encoding."
-                exit 1
-              fi
-      
-              echo "Creating temporary keychain..."
-              security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-      
-              # make keychain usable and avoid timing issues
-              security set-keychain-settings -t 3600 -l "$KEYCHAIN_PATH" || true
-      
-              # preserve current keychains and prepend our keychain to the search path
-              CURRENT_KEYCHAINS=$(security list-keychains -d user | sed -E 's/^[[:space:]]*"(.+)"$/\1/' | tr '\n' ' ')
-              security list-keychains -d user -s "$KEYCHAIN_PATH" $CURRENT_KEYCHAINS
-      
-              # unlock it
-              security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-      
-              echo "Importing certificate into keychain..."
-              # import and allow codesign/security to access the private key
-              security import "$CERTIFICATE_PATH" -k "$KEYCHAIN_PATH" -P "$P12_PASSWORD" -A -T /usr/bin/codesign -T /usr/bin/security
-      
-              echo "Setting key partition list to allow codesign access..."
-              # allow codesign / xcodebuild to access the key (required on modern macOS)
-              security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" || true
-      
-              echo "Listing codesigning identities (for debug) ..."
-              security find-identity -v -p codesigning "$KEYCHAIN_PATH" || true
-      
-              echo "Installing provisioning profile..."
-              mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-              cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/
-      
-              echo "Certificates and provisioning profile installed successfully."
-      
-          - name: 🔧 Prepare for iOS build
-            run: flutter build ios --config-only
-      
-          - name: 📦 Install iOS dependencies (CocoaPods)
-            run: |
-              cd ios
-              pod install --repo-update
-      
-          # --- FIM DA MUDANÇA CRÍTICA ---
-      
-          - name: 💾 Cache Pods
-            uses: actions/cache@v4
-            with:
-              path: ios/Pods
-              key: pods-${{ runner.os }}-${{ hashFiles('**/Podfile.lock') }}
-      
-          - name: 🔢 Set version
-            run: |
-              VERSION=$(grep 'version:' pubspec.yaml | sed 's/version: //g' | sed 's/+.*//')
-              BUILD_NUMBER=${{ github.event.inputs.build_number || github.run_number }}
-              sed -i '' "s/version: .*/version: $VERSION+$BUILD_NUMBER/" pubspec.yaml
-      
-          - name: 🏗️ Build IPA
-            run: |
-              flutter build ipa --release \
-                --export-options-plist=ios/ExportOptions.plist
-      
-          - name: 📤 Upload IPA artifact
-            uses: actions/upload-artifact@v4
-            with:
-              name: ipa-release
-              path: build/ios/ipa/*.ipa
-      
-          - name: 🧹 Clean keychain
-            if: always()
-            run: |
-              set -euo pipefail
-              # remove our temporary keychain from search list (restore previous list)
-              CURRENT_KEYCHAINS=$(security list-keychains -d user | sed -E 's/^[[:space:]]*"(.+)"$/\1/' | tr '\n' ' ')
-              # Try to delete the created keychain (ignore failures)
-              security delete-keychain "$KEYCHAIN_PATH" || true
-              rm -rf ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision || true
+  build-ios:
+    name: Build iOS (IPA)
+    needs: test
+    runs-on: macos-latest
+  
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+  
+      - name: 🎯 Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.35.3
+          channel: 'stable'
+          cache: true
+  
+      - name: 🎯 Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+  
+      - name: 📦 Get Flutter dependencies
+        run: flutter pub get
+  
+      # --- INÍCIO DA MUDANÇA CRÍTICA ---
+  
+      - name: 🔐 Install certificates and provisioning profile (robust)
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.IOS_BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.IOS_P12_PASSWORD }}
+          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
+          KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+  
+          # Fail fast when essential secrets are missing
+          if [ -z "${BUILD_CERTIFICATE_BASE64:-}" ] || [ -z "${BUILD_PROVISION_PROFILE_BASE64:-}" ] || [ -z "${KEYCHAIN_PASSWORD:-}" ]; then
+            echo "ERROR: Missing one or more iOS secrets. Ensure IOS_BUILD_CERTIFICATE_BASE64, IOS_PROVISION_PROFILE_BASE64 and IOS_KEYCHAIN_PASSWORD are set." >&2
+            exit 1
+          fi
+  
+          CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
+          PP_PATH="$RUNNER_TEMP/build_pp.mobileprovision"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+  
+          # Decode base64 with fallback for BSD(base64 -D) vs GNU(--decode)
+          if ! echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o "$CERTIFICATE_PATH" 2>/dev/null; then
+            echo -n "$BUILD_CERTIFICATE_BASE64" | base64 -D -o "$CERTIFICATE_PATH"
+          fi
+  
+          if ! echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o "$PP_PATH" 2>/dev/null; then
+            echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 -D -o "$PP_PATH"
+          fi
+  
+          # verify decoded files exist and are non-empty
+          for f in "$CERTIFICATE_PATH" "$PP_PATH"; do
+            if [ ! -s "$f" ]; then
+              echo "ERROR: Decoded file $f is empty or missing. Check your base64 secret." >&2
+              exit 2
+            fi
+          done
+  
+          # Create and configure temporary keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+  
+          # Add our keychain to the search list and make it the default for this session
+          EXISTING_LIST=$(security list-keychains -d user | tr -d '"' | xargs)
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $EXISTING_LIST
+          security default-keychain -s "$KEYCHAIN_PATH"
+  
+          # Import certificate into the keychain (P12 password may be empty)
+          # Allow codesign & security access with -A and set explicit access with set-key-partition-list
+          if ! security import "$CERTIFICATE_PATH" -k "$KEYCHAIN_PATH" -P "${P12_PASSWORD:-}" -A -t cert -f pkcs12; then
+            echo "ERROR: security import failed. Ensure the P12 is valid and password (if any) is correct." >&2
+            security find-identity -v -p codesigning "$KEYCHAIN_PATH" || true
+            exit 3
+          fi
+  
+          # Ensure codesign / xcodebuild can access the private key (partition list)
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+  
+          # Install provisioning profile
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/ || { echo "ERROR: failed to copy provisioning profile" >&2; exit 4; }
+  
+          echo "✅ Certificates and provisioning profile installed."
+  
+      - name: 🔧 Prepare for iOS build (config-only)
+        run: flutter build ios --config-only
+  
+      - name: 💾 Cache Pods (restore)
+        uses: actions/cache@v4
+        with:
+          path: ios/Pods
+          key: pods-${{ runner.os }}-${{ hashFiles('**/Podfile.lock') }}
+          restore-keys: |
+            pods-${{ runner.os }}-
+  
+      - name: 📦 Install iOS dependencies (CocoaPods)
+        run: |
+          cd ios
+          # ensure CocoaPods is available on runner; pod install with repo update to be safe
+          pod install --repo-update
+  
+      # --- FIM DA MUDANÇA CRÍTICA ---
+  
+      - name: 🔢 Set version
+        run: |
+          VERSION=$(grep 'version:' pubspec.yaml | sed 's/version: //g' | sed 's/+.*//')
+          BUILD_NUMBER=${{ github.event.inputs.build_number || github.run_number }}
+          sed -i '' "s/version: .*/version: $VERSION+$BUILD_NUMBER/" pubspec.yaml
+  
+      - name: 🏗️ Build IPA
+        run: |
+          flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
+  
+      - name: 📤 Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipa-release
+          path: build/ios/ipa/*.ipa
+  
+      - name: 🧹 Clean keychain and provisioning profiles
+        if: always()
+        run: |
+          set -euo pipefail
+          # delete keychain if exists
+          if security list-keychains -d user | grep -F "$RUNNER_TEMP/app-signing.keychain-db" >/dev/null 2>&1; then
+            security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" || true
+          fi
+          # remove provisioning profiles we placed (safely)
+          rm -f ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision || true
 
 
   # ============= DEPLOY =============
