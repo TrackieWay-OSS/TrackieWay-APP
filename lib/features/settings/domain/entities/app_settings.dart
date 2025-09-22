@@ -1,6 +1,5 @@
 import 'package:equatable/equatable.dart';
 
-/// Representa as configurações do aplicativo que podem ser ajustadas pelo usuário.
 class AppSettings extends Equatable {
   const AppSettings({
     this.isDarkMode = false,
@@ -8,13 +7,15 @@ class AppSettings extends Equatable {
     this.isHapticFeedbackEnabled = true,
     this.isHighContrastMode = false,
     this.textScaleFactor = 1.0,
+    this.isShakeToStartEnabled = true,
   });
 
   final bool isDarkMode;
-  final double speechRate; // Velocidade da fala (0.5 = devagar, 1.0 = normal, 2.0 = rápido)
-  final bool isHapticFeedbackEnabled; // Ativa/desativa a vibração
-  final bool isHighContrastMode; // Ativa/desativa o modo de alto contraste
-  final double textScaleFactor; // Fator de escala da fonte (1.0 = normal)
+  final double speechRate;
+  final bool isHapticFeedbackEnabled;
+  final bool isHighContrastMode;
+  final double textScaleFactor;
+  final bool isShakeToStartEnabled;
 
   AppSettings copyWith({
     bool? isDarkMode,
@@ -22,6 +23,7 @@ class AppSettings extends Equatable {
     bool? isHapticFeedbackEnabled,
     bool? isHighContrastMode,
     double? textScaleFactor,
+    bool? isShakeToStartEnabled,
   }) {
     return AppSettings(
       isDarkMode: isDarkMode ?? this.isDarkMode,
@@ -30,6 +32,8 @@ class AppSettings extends Equatable {
           isHapticFeedbackEnabled ?? this.isHapticFeedbackEnabled,
       isHighContrastMode: isHighContrastMode ?? this.isHighContrastMode,
       textScaleFactor: textScaleFactor ?? this.textScaleFactor,
+      isShakeToStartEnabled:
+          isShakeToStartEnabled ?? this.isShakeToStartEnabled,
     );
   }
 
@@ -40,5 +44,6 @@ class AppSettings extends Equatable {
         isHapticFeedbackEnabled,
         isHighContrastMode,
         textScaleFactor,
+        isShakeToStartEnabled,
       ];
 }

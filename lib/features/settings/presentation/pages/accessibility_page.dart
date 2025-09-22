@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:trackie_app/features/settings/presentation/bloc/settings_cubit.dart';
-
-// Giving the package an alias to avoid the name conflict.
 import 'package:app_settings/app_settings.dart' as device_settings;
 import 'package:trackie_app/features/settings/domain/entities/app_settings.dart';
 
@@ -21,17 +19,20 @@ class AccessibilityPage extends StatelessWidget {
           return ListView(
             padding: const EdgeInsets.all(8),
             children: [
+              _buildSectionTitle(context, 'Ativação Rápida'),
+              _buildShakeToStartSwitch(context, state, settingsCubit),
+              const Divider(),
               _buildSectionTitle(context, 'Leitura de Tela'),
               Semantics(
                 button: true,
                 label: 'Abrir configurações do leitor de tela',
-                hint: 'Ajuste o TalkBack (Android) ou VoiceOver (iOS) no seu dispositivo.',
+                hint:
+                    'Ajuste o TalkBack (Android) ou VoiceOver (iOS) no seu dispositivo.',
                 child: ListTile(
                   title: const Text('Abrir configurações do leitor de tela'),
                   subtitle: const Text(
                       'Ajuste o TalkBack ou VoiceOver no seu dispositivo.'),
                   leading: const Icon(Icons.record_voice_over),
-                  // FINAL CORRECTION: Using the correct method openAppSettings with the accessibility type.
                   onTap: () => device_settings.AppSettings.openAppSettings(
                     type: device_settings.AppSettingsType.accessibility,
                   ),
@@ -64,6 +65,17 @@ class AccessibilityPage extends StatelessWidget {
             .titleMedium
             ?.copyWith(fontWeight: FontWeight.bold),
       ),
+    );
+  }
+
+  Widget _buildShakeToStartSwitch(
+      BuildContext context, AppSettings state, SettingsCubit cubit) {
+    return SwitchListTile(
+      title: const Text('Agitar para Iniciar'),
+      subtitle: const Text('Sacuda o celular para ativar o assistente.'),
+      value: state.isShakeToStartEnabled,
+      onChanged: (_) => cubit.toggleShakeToStart(),
+      secondary: const Icon(Icons.vibration),
     );
   }
 

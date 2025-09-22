@@ -1,7 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:trackie_app/features/settings/domain/entities/app_settings.dart';
 
-/// Gerencia o estado das configurações do aplicativo.
 class SettingsCubit extends Cubit<AppSettings> {
   SettingsCubit() : super(const AppSettings());
 
@@ -23,5 +22,9 @@ class SettingsCubit extends Cubit<AppSettings> {
 
   void updateTextScaleFactor(double factor) {
     emit(state.copyWith(textScaleFactor: factor));
+  }
+
+  void toggleShakeToStart() {
+    emit(state.copyWith(isShakeToStartEnabled: !state.isShakeToStartEnabled));
   }
 }

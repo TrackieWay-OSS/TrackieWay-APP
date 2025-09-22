@@ -1,10 +1,10 @@
 name: trackie_app
 description: "A new Flutter project."
-publish_to: 'none' 
+publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.2.3 <4.0.0'
+  sdk: '>=3.9.2'
 
 dependencies:
   flutter:
@@ -13,13 +13,17 @@ dependencies:
   cupertino_icons: ^1.0.8
   flutter_bloc: ^8.1.5
   equatable: ^2.0.5
-  app_settings: ^5.1.1 # Adicionado para abrir as configurações do dispositivo
+  app_settings: ^5.1.1
+  shake: ^2.2.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
+  
   flutter_lints: ^4.0.0
+
+dependency_overrides:
+  sensors_plus: ^5.0.1
 
 flutter:
   uses-material-design: true
