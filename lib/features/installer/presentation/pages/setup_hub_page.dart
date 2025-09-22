@@ -4,7 +4,7 @@ import 'package:trackie_app/app/view/nav_page.dart';
 import 'package:trackie_app/features/installer/domain/entities/component_entity.dart';
 import 'package:trackie_app/features/installer/presentation/bloc/installer_cubit.dart';
 import 'package:trackie_app/features/installer/presentation/bloc/installer_state.dart';
-import 'package:trackie_app/features/installer/presentation/pages/accessibility_settings_page.dart';
+import 'package:trackie_app/features/settings/presentation/pages/accessibility_page.dart';
 
 class SetupHubPage extends StatelessWidget {
   const SetupHubPage({super.key});
@@ -21,7 +21,7 @@ class SetupHubPage extends StatelessWidget {
 class SetupHubView extends StatelessWidget {
   const SetupHubView({super.key});
 
-  @override
+  @override 
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -34,7 +34,7 @@ class SetupHubView extends StatelessWidget {
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => const AccessibilitySettingsPage(),
+                  builder: (_) => const AccessibilityPage(),
                 ),
               );
             },
