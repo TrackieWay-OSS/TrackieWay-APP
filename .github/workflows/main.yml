@@ -32,7 +32,7 @@ jobs:
       - name: 🎯 Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          flutter-version: 3.35.3
           channel: 'stable'
           cache: true
           
@@ -84,7 +84,7 @@ jobs:
       - name: 🎯 Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          flutter-version: 3.35.3
           channel: 'stable'
           cache: true
           
@@ -140,13 +140,13 @@ jobs:
             --build-number=${{ steps.version.outputs.build_number }}
           
       - name: 📤 Upload APK artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: apk-release
           path: build/app/outputs/flutter-apk/app-*-release.apk
           
       - name: 📤 Upload AAB artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: aab-release
           path: build/app/outputs/bundle/release/app-release.aab
@@ -157,99 +157,143 @@ jobs:
           rm -f android/app/upload-keystore.jks
           rm -f android/key.properties
 
-  # ============= BUILD iOS =============
+# ============= BUILD iOS =============
   build-ios:
     name: Build iOS (IPA)
     needs: test
     runs-on: macos-latest
-    
+  
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
-        
+  
       - name: 🎯 Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          flutter-version: 3.35.3
           channel: 'stable'
           cache: true
-          
+  
       - name: 🎯 Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
           bundler-cache: true
-          
-      - name: 📦 Install CocoaPods
-        run: |
-          sudo gem install cocoapods
-          
+  
       - name: 📦 Get Flutter dependencies
         run: flutter pub get
-        
-      - name: 💾 Cache Pods
-        uses: actions/cache@v3
-        with:
-          path: ios/Pods
-          key: pods-${{ runner.os }}-${{ hashFiles('**/Podfile.lock') }}
-          
-      - name: 📦 Install iOS dependencies
-        run: |
-          cd ios
-          pod install --repo-update
-          
-      - name: 🔐 Install certificates
+  
+      # --- INÍCIO DA MUDANÇA CRÍTICA ---
+  
+      - name: 🔐 Install certificates and provisioning profile (robust)
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.IOS_BUILD_CERTIFICATE_BASE64 }}
           P12_PASSWORD: ${{ secrets.IOS_P12_PASSWORD }}
           BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
           KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
         run: |
-          # Create variables
-          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
-          PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
-          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-          
-          # Import certificate and provisioning profile
-          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
-          echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o $PP_PATH
-          
-          # Create temporary keychain
-          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          
-          # Import certificate to keychain
-          security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
-          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security list-keychain -d user -s $KEYCHAIN_PATH
-          
-          # Apply provisioning profile
+          set -euo pipefail
+  
+          # Fail fast when essential secrets are missing
+          if [ -z "${BUILD_CERTIFICATE_BASE64:-}" ] || [ -z "${BUILD_PROVISION_PROFILE_BASE64:-}" ] || [ -z "${KEYCHAIN_PASSWORD:-}" ]; then
+            echo "ERROR: Missing one or more iOS secrets. Ensure IOS_BUILD_CERTIFICATE_BASE64, IOS_PROVISION_PROFILE_BASE64 and IOS_KEYCHAIN_PASSWORD are set." >&2
+            exit 1
+          fi
+  
+          CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
+          PP_PATH="$RUNNER_TEMP/build_pp.mobileprovision"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+  
+          # Decode base64 with fallback for BSD(base64 -D) vs GNU(--decode)
+          if ! echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o "$CERTIFICATE_PATH" 2>/dev/null; then
+            echo -n "$BUILD_CERTIFICATE_BASE64" | base64 -D -o "$CERTIFICATE_PATH"
+          fi
+  
+          if ! echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o "$PP_PATH" 2>/dev/null; then
+            echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 -D -o "$PP_PATH"
+          fi
+  
+          # verify decoded files exist and are non-empty
+          for f in "$CERTIFICATE_PATH" "$PP_PATH"; do
+            if [ ! -s "$f" ]; then
+              echo "ERROR: Decoded file $f is empty or missing. Check your base64 secret." >&2
+              exit 2
+            fi
+          done
+  
+          # Create and configure temporary keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+  
+          # Add our keychain to the search list and make it the default for this session
+          EXISTING_LIST=$(security list-keychains -d user | tr -d '"' | xargs)
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $EXISTING_LIST
+          security default-keychain -s "$KEYCHAIN_PATH"
+  
+          # Import certificate into the keychain (P12 password may be empty)
+          # Allow codesign & security access with -A and set explicit access with set-key-partition-list
+          if ! security import "$CERTIFICATE_PATH" -k "$KEYCHAIN_PATH" -P "${P12_PASSWORD:-}" -A -t cert -f pkcs12; then
+            echo "ERROR: security import failed. Ensure the P12 is valid and password (if any) is correct." >&2
+            security find-identity -v -p codesigning "$KEYCHAIN_PATH" || true
+            exit 3
+          fi
+  
+          # Ensure codesign / xcodebuild can access the private key (partition list)
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+  
+          # Install provisioning profile
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles
-          
+          cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/ || { echo "ERROR: failed to copy provisioning profile" >&2; exit 4; }
+  
+          echo "✅ Certificates and provisioning profile installed."
+  
+      - name: 🔧 Prepare for iOS build (config-only)
+        run: flutter build ios --config-only
+  
+      - name: 💾 Cache Pods (restore)
+        uses: actions/cache@v4
+        with:
+          path: ios/Pods
+          key: pods-${{ runner.os }}-${{ hashFiles('**/Podfile.lock') }}
+          restore-keys: |
+            pods-${{ runner.os }}-
+  
+      - name: 📦 Install iOS dependencies (CocoaPods)
+        run: |
+          cd ios
+          # ensure CocoaPods is available on runner; pod install with repo update to be safe
+          pod install --repo-update
+  
+      # --- FIM DA MUDANÇA CRÍTICA ---
+  
       - name: 🔢 Set version
         run: |
           VERSION=$(grep 'version:' pubspec.yaml | sed 's/version: //g' | sed 's/+.*//')
           BUILD_NUMBER=${{ github.event.inputs.build_number || github.run_number }}
           sed -i '' "s/version: .*/version: $VERSION+$BUILD_NUMBER/" pubspec.yaml
-          
+  
       - name: 🏗️ Build IPA
         run: |
-          flutter build ipa --release \
-            --export-options-plist=ios/ExportOptions.plist
-            
+          flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
+  
       - name: 📤 Upload IPA artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ipa-release
           path: build/ios/ipa/*.ipa
-          
-      - name: 🧹 Clean keychain
+  
+      - name: 🧹 Clean keychain and provisioning profiles
         if: always()
         run: |
-          security delete-keychain $RUNNER_TEMP/app-signing.keychain-db
-          rm -rf ~/Library/MobileDevice/Provisioning\ Profiles
+          set -euo pipefail
+          # delete keychain if exists
+          if security list-keychains -d user | grep -F "$RUNNER_TEMP/app-signing.keychain-db" >/dev/null 2>&1; then
+            security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" || true
+          fi
+          # remove provisioning profiles we placed (safely)
+          rm -f ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision || true
+
 
   # ============= DEPLOY =============
   deploy:
@@ -260,7 +304,7 @@ jobs:
     
     steps:
       - name: 📥 Download artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         
       - name: 🚀 Deploy to Google Play
         uses: r0adkll/upload-google-play@v1

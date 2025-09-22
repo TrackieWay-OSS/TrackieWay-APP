@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:trackie_app/app/view/app.dart';
+import 'package:trackie_app/features/settings/presentation/bloc/settings_cubit.dart';
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-  ]);
-
-  runApp(const App());
+void main() {
+  runApp(
+    MultiBlocProvider(
+      providers: [
+        BlocProvider(create: (_) => SettingsCubit()),
+      ],
+      child: const App(),
+    ),
+  );
 }
-
 

@@ -1,33 +1,112 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:trackie_app/features/settings/domain/entities/app_settings.dart';
+import 'package:trackie_app/features/settings/presentation/bloc/settings_cubit.dart';
 
-class AccessibilitySettingsPage extends StatefulWidget {
+class AccessibilitySettingsPage extends StatelessWidget {
   const AccessibilitySettingsPage({super.key});
 
   @override
-  State<AccessibilitySettingsPage> createState() =>
-      _AccessibilitySettingsPageState();
-}
+  Widget build(BuildContext context) {
+    return BlocBuilder<SettingsCubit, AppSettings>(
+      builder: (context, settings) {
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Ajustes de Acessibilidade'),
+            centerTitle: true,
+          ),
+          body: ListView(
+            padding: const EdgeInsets.all(16.0),
+            children: [
+              _buildSectionTitle(context, 'Ativação e Comandos'),
+              _buildSwitchTile(
+                context: context,
+                title: 'Ativar por Voz ("Ok Trackie")',
+                subtitle: 'Inicie o assistente com um comando de voz.',
+                value: settings.wakeWordEnabled,
+                onChanged: (newValue) =>
+                    context.read<SettingsCubit>().setWakeWord(newValue),
+                icon: Icons.mic_none,
+              ),
+              _buildSwitchTile(
+                context: context,
+                title: 'Agitar para Iniciar',
+                subtitle: 'Sacuda o aparelho para ativar o assistente.',
+                value: settings.shakeToStartEnabled,
+                onChanged: (newValue) =>
+                    context.read<SettingsCubit>().setShakeToStart(newValue),
+                icon: Icons.vibration,
+              ),
+              _buildSwitchTile(
+                context: context,
+                title: 'Notificação Persistente',
+                subtitle: 'Acesso rápido na barra de notificações.',
+                value: settings.persistentNotificationEnabled,
+                onChanged: (newValue) => context
+                    .read<SettingsCubit>()
+                    .setPersistentNotification(newValue),
+                icon: Icons.notifications_active_outlined,
+              ),
+              const Divider(height: 32),
+              _buildSectionTitle(context, 'Feedback de Áudio'),
+              _buildSelectorTile(
+                context: context,
+                title: 'Nível de Detalhe da Fala',
+                currentValue: settings.verbosityLevel,
+                onTap: () {
+                  _showSelectionDialog(
+                    context: context,
+                    title: 'Selecione o Nível de Detalhe',
+                    options: ['Baixo', 'Médio', 'Alto'],
+                    currentSelection: settings.verbosityLevel,
+                    onSelected: (newValue) => context
+                        .read<SettingsCubit>()
+                        .setVerbosityLevel(newValue),
+                  );
+                },
+              ),
+              _buildSwitchTile(
+                context: context,
+                title: 'Áudio Espacial (3D)',
+                subtitle: 'Sons e alertas virão da direção do objeto.',
+                value: settings.spatialAudioEnabled,
+                onChanged: (newValue) =>
+                    context.read<SettingsCubit>().setSpatialAudio(newValue),
+                icon: Icons.spatial_audio_off_outlined,
+              ),
+              _buildSwitchTile(
+                context: context,
+                title: 'Ícones Sonoros (Earcons)',
+                subtitle: 'Use sons sutis para eventos comuns.',
+                value: settings.earconsEnabled,
+                onChanged: (newValue) =>
+                    context.read<SettingsCubit>().setEarcons(newValue),
+                icon: Icons.music_note_outlined,
+              ),
+              const Divider(height: 32),
+              _buildSectionTitle(context, 'Feedback Tátil'),
+              _buildSwitchTile(
+                context: context,
+                title: 'Padrões de Vibração',
+                subtitle: 'Use vibrações distintas para alertas.',
+                value: settings.hapticPatternsEnabled,
+                onChanged: (newValue) =>
+                    context.read<SettingsCubit>().setHapticPatterns(newValue),
+                icon: Icons.waves_outlined,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
-class _AccessibilitySettingsPageState extends State<AccessibilitySettingsPage> {
-  // Estado das configurações
-  bool _wakeWordEnabled = true;
-  bool _shakeToStartEnabled = false;
-  bool _persistentNotificationEnabled = true;
-
-  String _verbosityLevel = 'Médio';
-  final List<String> _verbosityOptions = ['Baixo', 'Médio', 'Alto'];
-
-  bool _spatialAudioEnabled = true;
-  bool _earconsEnabled = false;
-
-  bool _hapticPatternsEnabled = true;
-
-  void _showSelectionDialog<T>({
+  void _showSelectionDialog({
     required BuildContext context,
     required String title,
-    required List<T> options,
-    required T currentSelection,
-    required ValueChanged<T> onSelected,
+    required List<String> options,
+    required String currentSelection,
+    required ValueChanged<String> onSelected,
   }) {
     showDialog(
       context: context,
@@ -45,82 +124,6 @@ class _AccessibilitySettingsPageState extends State<AccessibilitySettingsPage> {
           }).toList(),
         );
       },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Ajustes de Acessibilidade'),
-        centerTitle: true,
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16.0),
-        children: [
-          _buildSectionTitle(context, 'Ativação e Comandos'),
-          _buildSwitchTile(
-            title: 'Ativar por Voz ("Ok Trackie")',
-            subtitle: 'Inicie o assistente com um comando de voz.',
-            value: _wakeWordEnabled,
-            onChanged: (newValue) => setState(() => _wakeWordEnabled = newValue),
-            icon: Icons.mic_none,
-          ),
-          _buildSwitchTile(
-            title: 'Agitar para Iniciar',
-            subtitle: 'Sacuda o aparelho para ativar o assistente.',
-            value: _shakeToStartEnabled,
-            onChanged: (newValue) => setState(() => _shakeToStartEnabled = newValue),
-            icon: Icons.vibration,
-          ),
-          _buildSwitchTile(
-            title: 'Notificação Persistente',
-            subtitle: 'Acesso rápido na barra de notificações.',
-            value: _persistentNotificationEnabled,
-            onChanged: (newValue) => setState(() => _persistentNotificationEnabled = newValue),
-            icon: Icons.notifications_active_outlined,
-          ),
-          const Divider(height: 32),
-          _buildSectionTitle(context, 'Feedback de Áudio'),
-          _buildSelectorTile(
-            context: context,
-            title: 'Nível de Detalhe da Fala',
-            currentValue: _verbosityLevel,
-            onTap: () {
-              _showSelectionDialog(
-                context: context,
-                title: 'Selecione o Nível de Detalhe',
-                options: _verbosityOptions,
-                currentSelection: _verbosityLevel,
-                onSelected: (newValue) => setState(() => _verbosityLevel = newValue),
-              );
-            },
-          ),
-          _buildSwitchTile(
-            title: 'Áudio Espacial (3D)',
-            subtitle: 'Sons e alertas virão da direção do objeto.',
-            value: _spatialAudioEnabled,
-            onChanged: (newValue) => setState(() => _spatialAudioEnabled = newValue),
-            icon: Icons.spatial_audio_off_outlined,
-          ),
-          _buildSwitchTile(
-            title: 'Ícones Sonoros (Earcons)',
-            subtitle: 'Use sons sutis para eventos comuns.',
-            value: _earconsEnabled,
-            onChanged: (newValue) => setState(() => _earconsEnabled = newValue),
-            icon: Icons.music_note_outlined,
-          ),
-          const Divider(height: 32),
-          _buildSectionTitle(context, 'Feedback Tátil'),
-          _buildSwitchTile(
-            title: 'Padrões de Vibração',
-            subtitle: 'Use vibrações distintas para alertas.',
-            value: _hapticPatternsEnabled,
-            onChanged: (newValue) => setState(() => _hapticPatternsEnabled = newValue),
-            icon: Icons.waves_outlined,
-          ),
-        ],
-      ),
     );
   }
 
@@ -154,6 +157,7 @@ class _AccessibilitySettingsPageState extends State<AccessibilitySettingsPage> {
   }
 
   Widget _buildSwitchTile({
+    required BuildContext context,
     required String title,
     required String subtitle,
     required bool value,
