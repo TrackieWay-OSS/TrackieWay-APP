@@ -15,6 +15,9 @@ dependencies:
   equatable: ^2.0.5
   app_settings: ^5.1.1
   shake: ^2.2.0
+  
+  # Adicionado para funcionalidade Bluetooth
+  flutter_blue_plus: ^1.31.18
 
 dev_dependencies:
   flutter_test:
@@ -27,3 +30,4 @@ dependency_overrides:
 
 flutter:
   uses-material-design: true
+

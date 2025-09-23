@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:trackie_app/features/devices/domain/entities/device_entity.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:trackie_app/features/devices/presentation/bloc/devices_cubit.dart';
 import 'package:trackie_app/features/devices/presentation/bloc/devices_state.dart';
 
@@ -9,186 +9,160 @@ class DevicesPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => DevicesCubit(),
-      child: const DevicesView(),
-    );
-  }
-}
-
-class DevicesView extends StatelessWidget {
-  const DevicesView({super.key});
-
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Meus Dispositivos'),
+        title: const Text('Dispositivos'),
         centerTitle: true,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            _buildConnectedDeviceCard(),
-            const SizedBox(height: 24),
-            _buildAvailableDevicesSection(),
-            const SizedBox(height: 16),
-            Expanded(child: _buildDeviceList()),
-          ],
-        ),
+      body: BlocConsumer<DevicesCubit, DevicesState>(
+        listener: (context, state) {
+          if (state.errorMessage != null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.errorMessage!),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        },
+        builder: (context, state) {
+          if (state.connectionStatus == DeviceStatus.connected && state.connectedDevice != null) {
+            return _buildConnectedView(context, state.connectedDevice!);
+          } else {
+            return _buildScanningView(context, state);
+          }
+        },
       ),
     );
   }
 
-  Widget _buildConnectedDeviceCard() {
-    return BlocBuilder<DevicesCubit, DevicesState>(
-      buildWhen: (previous, current) =>
-          previous.connectedDevice != current.connectedDevice,
-      builder: (context, state) {
-        final theme = Theme.of(context);
-        final device = state.connectedDevice;
-        final isConnected =
-            device != null && device.status == DeviceStatus.connected;
+  // --- Widgets de Construção da UI ---
 
-        return Card(
-          color: isConnected
-              ? theme.colorScheme.primaryContainer
-              : theme.colorScheme.surfaceVariant,
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      isConnected
-                          ? Icons.bluetooth_connected
-                          : Icons.bluetooth_disabled,
-                      size: 40,
-                      color: isConnected
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            isConnected
-                                ? device.name
-                                : 'Nenhum Dispositivo Conectado',
-                            style: theme.textTheme.titleLarge
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            isConnected
-                                ? 'Bateria: ${device.batteryLevel}% | Firmware: ${device.firmwareVersion}'
-                                : 'Procure por dispositivos para conectar.',
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+  Widget _buildConnectedView(BuildContext context, BluetoothDevice device) {
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Icon(Icons.bluetooth_connected,
+              size: 100, color: Colors.green.shade600),
+          const SizedBox(height: 24),
+          Text(
+            'Conectado a:',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            device.platformName.isNotEmpty ? device.platformName : 'Dispositivo Desconhecido',
+            textAlign: TextAlign.center,
+            style: Theme.of(context)
+                .textTheme
+                .headlineMedium
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 48),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.link_off),
+            label: const Text('Desconectar'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              textStyle: const TextStyle(fontSize: 16),
+            ),
+            onPressed: () {
+              context.read<DevicesCubit>().disconnect();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScanningView(BuildContext context, DevicesState state) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ElevatedButton.icon(
+                icon: state.isScanning
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child:
+                            CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
+                      )
+                    : const Icon(Icons.search),
+                label: Text(state.isScanning
+                    ? 'Procurando...'
+                    : 'Procurar Dispositivos'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  textStyle: const TextStyle(fontSize: 16),
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 ),
-                if (isConnected) ...[
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: TextButton.icon(
-                      onPressed: () =>
-                          context.read<DevicesCubit>().disconnectDevice(),
-                      icon: const Icon(Icons.link_off),
-                      label: const Text('Desconectar'),
-                    ),
-                  )
-                ]
-              ],
+                onPressed: state.isScanning
+                    ? null
+                    : () => context.read<DevicesCubit>().startScan(),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        if (state.isScanning && state.scanResults.isEmpty)
+          const Expanded(
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Procurando por dispositivos próximos...'),
+                ],
+              ),
+            ),
+          )
+        else if (!state.isScanning && state.scanResults.isEmpty)
+          Expanded(
+            child: Center(
+              child: Text(
+                'Nenhum dispositivo encontrado.\nClique em "Procurar" para iniciar.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+            ),
+          )
+        else
+          Expanded(
+            child: ListView.separated(
+              itemCount: state.scanResults.length,
+              separatorBuilder: (context, index) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final result = state.scanResults[index];
+                return _buildDeviceTile(context, result.device);
+              },
             ),
           ),
-        );
-      },
+      ],
     );
   }
 
-  Widget _buildAvailableDevicesSection() {
-    return BlocBuilder<DevicesCubit, DevicesState>(
-      buildWhen: (previous, current) => previous.isScanning != current.isScanning,
-      builder: (context, state) {
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Dispositivos Próximos',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            ElevatedButton(
-              onPressed: state.isScanning
-                  ? null
-                  : () => context.read<DevicesCubit>().startScan(),
-              child: state.isScanning
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Procurar'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildDeviceList() {
-    return BlocBuilder<DevicesCubit, DevicesState>(
-      builder: (context, state) {
-        if (state.isScanning) {
-          return const Center(child: Text('Procurando...'));
-        }
-
-        if (state.foundDevices.isEmpty) {
-          return const Center(child: Text('Nenhum dispositivo encontrado.'));
-        }
-
-        return ListView.builder(
-          itemCount: state.foundDevices.length,
-          itemBuilder: (context, index) {
-            final device = state.foundDevices[index];
-            return _buildDeviceTile(context, device);
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildDeviceTile(BuildContext context, DeviceEntity device) {
-    final cubit = context.read<DevicesCubit>();
-    final isConnectedToThisDevice = cubit.state.connectedDevice?.id == device.id;
-
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4.0),
-      child: ListTile(
-        leading: const Icon(Icons.headset_mic),
-        title: Text(device.name),
-        subtitle: Text('Sinal: ${device.rssi} dBm'),
-        trailing: isConnectedToThisDevice
-            ? const Chip(
-                avatar: Icon(Icons.check_circle, color: Colors.green, size: 20),
-                label: Text('Conectado'),
-                padding: EdgeInsets.symmetric(horizontal: 8),
-              )
-            : ElevatedButton(
-                onPressed: () => cubit.connectToDevice(device),
-                child: const Text('Conectar'),
-              ),
+  Widget _buildDeviceTile(BuildContext context, BluetoothDevice device) {
+    return ListTile(
+      leading: const Icon(Icons.bluetooth, size: 30),
+      title: Text(device.platformName.isNotEmpty ? device.platformName : 'Dispositivo Desconhecido'),
+      subtitle: Text(device.remoteId.toString()),
+      trailing: ElevatedButton(
+        child: const Text('Conectar'),
+        onPressed: () => context.read<DevicesCubit>().connectToDevice(device),
       ),
     );
   }
 }
+
