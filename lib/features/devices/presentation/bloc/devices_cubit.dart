@@ -1,42 +1,78 @@
+import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:trackie_app/features/devices/domain/entities/device_entity.dart';
-import 'package:trackie_app/features/devices/presentation/bloc/devices_state.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'devices_state.dart';
 
 class DevicesCubit extends Cubit<DevicesState> {
+  StreamSubscription<List<ScanResult>>? _scanSubscription;
+  StreamSubscription<BluetoothConnectionState>? _connectionSubscription;
+
   DevicesCubit() : super(const DevicesState());
 
-  void startScan() async {
-    emit(state.copyWith(isScanning: true, foundDevices: []));
+  Future<void> startScan() async {
+    if (state.isScanning) return;
 
-    await Future.delayed(const Duration(seconds: 3));
+    // Verifica se o Bluetooth está ligado
+    if (await FlutterBluePlus.adapterState.first != BluetoothAdapterState.on) {
+      emit(state.copyWith(errorMessage: 'Por favor, ative o Bluetooth.'));
+      return;
+    }
 
-    final mockDevices = [
-      DeviceEntity(
-        name: 'Trackie SpotWay',
-        id: 'AB:12:CD:34:EF:56',
-        rssi: -55,
-        batteryLevel: 92,
-        firmwareVersion: 'v1.1.0',
-      ),
-      DeviceEntity(
-        name: 'Trackie RaspWay',
-        id: 'FF:A1:B2:C3:D4:E5',
-        rssi: -78,
-        batteryLevel: 75,
-        firmwareVersion: 'v1.3.2',
-      ),
-    ];
+    emit(state.copyWith(isScanning: true, scanResults: [], errorMessage: null));
 
-    emit(state.copyWith(isScanning: false, foundDevices: mockDevices));
+    _scanSubscription = FlutterBluePlus.scanResults.listen((results) {
+      // Correção: Filtra para mostrar apenas dispositivos com nome "Trackie"
+      final filteredResults = results
+          .where((r) =>
+              r.device.platformName.toLowerCase().startsWith('trackie'))
+          .toList();
+      emit(state.copyWith(scanResults: filteredResults));
+    });
+
+    await FlutterBluePlus.startScan(timeout: const Duration(seconds: 5));
+    // Quando o scan termina, o próprio pacote para.
+    emit(state.copyWith(isScanning: false));
   }
 
-  void connectToDevice(DeviceEntity device) {
-    final newConnectedDevice = device.copyWith(status: DeviceStatus.connected);
-    emit(state.copyWith(connectedDevice: newConnectedDevice));
+  Future<void> connectToDevice(BluetoothDevice device) async {
+    if (state.connectionStatus == DeviceStatus.connecting) return;
+
+    emit(state.copyWith(connectionStatus: DeviceStatus.connecting));
+
+    _connectionSubscription = device.connectionState.listen((connectionState) {
+      if (connectionState == BluetoothConnectionState.connected) {
+        emit(state.copyWith(
+          connectionStatus: DeviceStatus.connected,
+          connectedDevice: device,
+          scanResults: [], // Limpa os resultados após conectar
+        ));
+      } else if (connectionState == BluetoothConnectionState.disconnected) {
+        disconnect(); // Garante que o estado seja limpo
+      }
+    });
+
+    try {
+      await device.connect(timeout: const Duration(seconds: 15));
+    } catch (e) {
+      emit(state.copyWith(
+        connectionStatus: DeviceStatus.error,
+        errorMessage: 'Falha ao conectar ao dispositivo.',
+      ));
+    }
   }
 
-  void disconnectDevice() {
-    emit(state.copyWith(connectedDevice: DeviceEntity.empty));
+  Future<void> disconnect() async {
+    await state.connectedDevice?.disconnect();
+    await _connectionSubscription?.cancel();
+    emit(const DevicesState()); // Reseta para o estado inicial
+  }
+
+  @override
+  Future<void> close() {
+    _scanSubscription?.cancel();
+    _connectionSubscription?.cancel();
+    FlutterBluePlus.stopScan();
+    return super.close();
   }
 }
 

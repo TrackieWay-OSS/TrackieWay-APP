@@ -1,29 +1,45 @@
 import 'package:equatable/equatable.dart';
-import 'package:trackie_app/features/devices/domain/entities/device_entity.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+
+enum DeviceStatus { disconnected, connecting, connected, error }
 
 class DevicesState extends Equatable {
-  final List<DeviceEntity> foundDevices;
-  final DeviceEntity? connectedDevice;
   final bool isScanning;
+  final List<ScanResult> scanResults;
+  final BluetoothDevice? connectedDevice;
+  final DeviceStatus connectionStatus;
+  final String? errorMessage;
 
   const DevicesState({
-    this.foundDevices = const [],
-    this.connectedDevice,
     this.isScanning = false,
+    this.scanResults = const [],
+    this.connectedDevice,
+    this.connectionStatus = DeviceStatus.disconnected,
+    this.errorMessage,
   });
 
   DevicesState copyWith({
-    List<DeviceEntity>? foundDevices,
-    DeviceEntity? connectedDevice,
     bool? isScanning,
+    List<ScanResult>? scanResults,
+    BluetoothDevice? connectedDevice,
+    DeviceStatus? connectionStatus,
+    String? errorMessage,
   }) {
     return DevicesState(
-      foundDevices: foundDevices ?? this.foundDevices,
-      connectedDevice: connectedDevice ?? this.connectedDevice,
       isScanning: isScanning ?? this.isScanning,
+      scanResults: scanResults ?? this.scanResults,
+      connectedDevice: connectedDevice ?? this.connectedDevice,
+      connectionStatus: connectionStatus ?? this.connectionStatus,
+      errorMessage: errorMessage ?? this.errorMessage,
     );
   }
 
   @override
-  List<Object?> get props => [foundDevices, connectedDevice, isScanning];
+  List<Object?> get props => [
+        isScanning,
+        scanResults,
+        connectedDevice,
+        connectionStatus,
+        errorMessage,
+      ];
 }

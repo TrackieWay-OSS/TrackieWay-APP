@@ -2,6 +2,14 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+    <string>O TrackieWay usa Bluetooth para se conectar a dispositivos de assistência.</string>
+    <key>NSBluetoothPeripheralUsageDescription</key>
+    <string>O TrackieWay usa Bluetooth para encontrar e se conectar a dispositivos de assistência próximos.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+    <string>O Trackie precisa de acesso ao reconhecimento de fala para os comandos de voz.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>O Trackie precisa de acesso ao microfone para os comandos de voz.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
